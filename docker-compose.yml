@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres
+    environment:
+      - POSTGRES_USER=${SPRING_DATASOURCE_USER}
+      - POSTGRES_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgData:/var/lib/postgresql/data
+  keycloak-db:
+    image: postgres
+    environment:
+      - POSTGRES_DB=${KC_DB_URL_DATABASE}
+      - POSTGRES_USER=${KC_DB_USER}
+      - POSTGRES_PASSWORD=${KC_DB_PASSWORD}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgDataKeyCloak:/var/lib/postgresql/data
+  images-storage:
+    image: minio/minio:latest
+    command: minio server /var/lib/minio/data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+  app:
+    build: .
+    ports:
+      - '8081:8080'
+    depends_on:
+      - db
+    environment:
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USER}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+  keycloak:
+    build:
+      context: .
+      dockerfile: keycloak.Dockerfile
+    command: ["start-dev"]
+    depends_on:
+      - keycloak-db
+    environment:
+      # database
+      - KC_DB=postgres
+      - KC_DB_URL_HOST=keycloak-db
+      - KC_DB_URL_DATABASE=${KC_DB_URL_DATABASE}
+      - KC_DB_USERNAME=${KC_DB_USER}
+      - KC_DB_PASSWORD=${KC_DB_PASSWORD}
+      # keycloak credential
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      # network and self sign key
+      - KC_HTTP_ENABLED=true
+      - KC_HOSTNAME_STRICT_HTTPS=false
+      - KC_LOG_LEVEL=info
+      - KC_HTTPS_CERTIFICATE_FILE=/opt/keycloak/certs/localhostcert.pem
+      - KC_HTTPS_CERTIFICATE_KEY_FILE=/opt/keycloak/certs/localhostkey.pem
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+  rabbit-mq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+volumes:
+  pgData:
+  pgDataKeyCloak:
